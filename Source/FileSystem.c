@@ -1,5 +1,6 @@
 # include <stdio.h>
 # include <string.h>
+# include <stdarg.h>
 # include "FileSystem.h"
 
 void *fs;					// file system 
@@ -8,7 +9,10 @@ void *ibm;
 struct super_block *sb;		// super block 
 struct inode *i_tab;		// table of inode structure
 void *d_blks;
+int update_sb = 0;
 
+
+static int UpdateSuperBlock(int update_sb, ...);
 
 static void InitFS() 
 {
@@ -23,7 +27,7 @@ static void InitFS()
 	i_tab  = ibm + BLK_SIZE;
 	d_blks = (void *) i_tab + (INODES * sizeof(struct inode));
 
-    printf("sizeof(struct inode)  =    %d\n", (int) sizeof(struct inode));
+    //printf("sizeof(struct inode)  =    %d\n", (int) sizeof(struct inode));
 
     printf("fs  = 0x%08X\n", (unsigned long)fs);
     printf("sb  = 0x%08X\n", (unsigned int)sb);
@@ -44,11 +48,11 @@ static void InitFS()
 
 	dbm = memset(dbm, 0, 128);
 	
-	printf ("dbm = %d\n",*(int*)dbm);
+	//printf ("dbm = %d\n",*(int*)dbm);
 
 	ibm = memset(ibm, 0, 128);	
 
-	printf ("ibm = %d\n",*(int*)ibm);
+	//printf ("ibm = %d\n",*(int*)ibm);
 }
 static int GetPosition(void *block)
 {
@@ -88,19 +92,31 @@ static int Filling_ITable(int index, char *file_name)
 	printf("File name = %s\n", temp_inode->fname);
 	
 }
-static int UpdateSuperBlock()
+static int UpdateSuperBlock(int update_sb, ...)
 {
-    sb->free_inodes = sb->free_inodes - 1;
+	va_list ptr;
+	int pos;
+
+	
+	if (update_sb == 0)
+    	sb->free_inodes = sb->free_inodes - 1;
+	else {
+		va_start(ptr, update_sb);
+		pos = va_arg(ptr, int);
+		//printf("update_sb = %d pos = %d\n", update_sb, pos);
+		sb->free_datablocks = sb->free_datablocks - pos;
+	}
 }
 static int CreateFile(char *file_name)
 {
 	int pos;
+	int update_sb = 0;
 	pos = GetPosition(ibm);
-	printf ("pos = %d\n", pos);
+	//printf ("pos = %d\n", pos);
 	if (SetBit(ibm, pos) == 0)
 		printf ("bit is set successfuly\n");
 	Filling_ITable(pos, file_name);
-	UpdateSuperBlock();
+	UpdateSuperBlock(update_sb, pos);
 }
 static int GetInode(char *file_name, int *inode)
 {
@@ -123,12 +139,16 @@ static int GetInode(char *file_name, int *inode)
 static int WriteInToFile(char *file_name)
 {
 	int inode;
-	char buf[80];
+	char *buf;
 	char c;
-	int i;
+	int count;
 	int pos;
 	struct inode *temp_inode;
 	void *temp_data;
+	unsigned char update_sb;
+
+	update_sb = 1;
+	buf = NULL;
 	
 
 	if (GetInode(file_name, &inode) == 0) {
@@ -137,32 +157,33 @@ static int WriteInToFile(char *file_name)
 		printf ("Enter valid file_name\n");
 		return -1;
 	}
-	for (i = 0;(c = getchar()) != EOF; i++) {
-		buf[i] = c;
+
+	for (count = 0;(c = getchar()) != EOF; count++) {
+		buf = (char*) realloc(buf, count + 1);
+		buf[count] = c;
 	}
-	buf[i] = '\0';
-	
-	printf("buf = %s\n", buf);
 
 	pos = GetPosition(dbm);	
-	printf("ps = %d\n", pos);
-
 	if (SetBit(dbm, pos) == 0)
 		printf("data bit is set successfuly\n");
+
+	count = sizeof(buf) / BLK_SIZE;
+	if (sizeof(buf) % BLK_SIZE != 0)
+		count++;
+
+	temp_data = d_blks + (pos * BLK_SIZE);
+	memcpy(temp_data, buf, strlen(buf) + 1);
+
 	/* Update inode struct */
-		
 	temp_inode = i_tab + inode;
-	printf("temp_inode->i_no = %d\n", temp_inode->i_no);
-	temp_inode->size = strlen(buf) + 1;
-	temp_inode->blk_used = 1;
-	temp_inode->blk[0] = pos;
+	temp_inode->size = sizeof(buf);
+	temp_inode->blk_used = count;
 
-		
-	temp_data = d_blks + pos;
-	memcpy(temp_data, buf, sizeof(buf));
-	printf("%s\n", (char*)temp_data);
+	for (c = 0;c < count; c++) 
+		temp_inode->blk[c] = pos + c;
 
-	
+	/* Updating super_block after allocating data */
+	UpdateSuperBlock(update_sb, count);
 	
 }
 
@@ -174,6 +195,29 @@ static int SuperBlockDetails()
 	printf("sb->free_datablocks = %d\n", sb->free_datablocks);
 
 }
+
+static int ReadingBlockContents(char *file_name)
+{
+	int inode;
+	void *Data;
+	unsigned short Count;
+	struct inode *temp_inode;
+
+
+	if (GetInode(file_name, &inode) == 0) {
+		printf("File name found and inode = %d\n", inode);
+	} else {
+		printf ("Enter valid file_name\n");
+		return -1;
+	}
+	temp_inode = i_tab + inode;
+	for (Count = 0; Count < temp_inode->blk_used; Count++){
+		Data = d_blks + (temp_inode->blk[Count] * BLK_SIZE);
+		write(1, Data,BLK_SIZE);
+	}
+
+}
+
 int main()
 {
 	int choice;
@@ -186,6 +230,7 @@ int main()
 		printf("1->Create\n");
 		printf("2->Write\n");
 		printf("3->Super\n");
+		printf("4->Display\n");
 		scanf("%d", &choice);
 
 		switch (choice)
@@ -202,6 +247,11 @@ int main()
 				break;
 			case 3:
 				SuperBlockDetails();
+				break;
+			case 4:
+				printf("Enter the file_name:");
+				scanf("%s", file_name);
+				ReadingBlockContents(file_name);
 				break;
 			default:
 				printf("Enter valid option\n");
