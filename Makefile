@@ -7,7 +7,7 @@
 #                                                                               
 #  History                                                                      
 #  ---------------------------------------------------------------------------- 
-#  20-Nov-2015   Create a Simple Makefile
+#  15-Dec-2015   karthik M             Adding Distclean Recipe
 #                                                                               
 ############################################################################### 
 
@@ -54,3 +54,6 @@ ${OBJDIR}%.o:%.c  FileSystem.h
 
 clean:
 	rm -rf $(OBJECTS) $(TARGET_APP)
+
+distclean:
+	rm -f `find . -iname 'cscope.*' -o -iname 'tags' -type f`
