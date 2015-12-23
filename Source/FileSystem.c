@@ -79,7 +79,7 @@ static void InitFS()
 /**
  * @fn     static int GetPosition(void *block);
  * @brief  Function to  Get the Position of the Free bit in GroupDescriptor
- * @param  block Pointer to the Block
+ * @param  Block Pointer to the Block
  * @return position of free bit in the Block
  */
 static int GetPosition(void *Block)
@@ -97,10 +97,10 @@ static int GetPosition(void *Block)
 }
 
 /**
- * @fn     static RetVal SetBit(void *block, int pos)
+ * @fn     static RetVal SetBit(void *block, int pos);
  * @brief  Function to  set the Position of the Free bit in GroupDescriptor
- * @param  block Pointer to the Block
- * @param  pos  position of set bit
+ * @param  Block Pointer to the Block
+ * @param  Pos  position of set bit
  * @return RET_OK on Success
  *         RET_ERR on Error
  */
@@ -195,7 +195,7 @@ static RetVal FillingITable(int Index, char *FileName)
 /**
  * @fn     static int UpdateSuperBlock(int UpdateSB, ...);
  * @brief  Function to  Update the SuperBlock structure.
- * @param  UpdateSB  Value to Determine which operatoin needs to be performed
+ * @param  UpdateSB  Value to Determine which operation needs to be performed
  * @param  vararg  paramerts to update the Super Block
  * @return RET_OK on Success
  *         RET_ERR on Error
@@ -211,7 +211,7 @@ static RetVal UpdateSuperBlock(int UpdateSB, ...)
    }
    if (0 == UpdateSB)
       sb->free_inodes = sb->free_inodes - 1;
-   else if(1 == UpdateSB){
+   else if (1 == UpdateSB){
       va_start(Ptr, UpdateSB);
       Pos = va_arg(Ptr, int);
       //PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
@@ -242,9 +242,9 @@ static RetVal CreateFile(char *FileName)
       return RET_ERR;
    }
    Pos = GetPosition(ibm);
-   NOPRINT ("Pos = %d\n", Pos);
+   NOPRINT("Pos = %d\n", Pos);
    if (SetBit(ibm, Pos) == 0)
-      PRINT ("bit is set successfuly\n");
+      PRINT("bit is set successfuly\n");
    FillingITable(Pos, FileName);
    UpdateSuperBlock(UpdateSB, Pos);
    return RET_OK;
@@ -287,7 +287,7 @@ static RetVal GetInode(char *FileName, int *InodeNum)
 
 /**
  * @fn     static RetVal WriteInToFile(char *FileName)
- * @brief  Function to Write the Date info Filename
+ * @brief  Function to Write the Data info Filename
  * @param  FileName   Name of the File to Written the File Content
  * @return RET_OK on Success
  *         RET_ERR on Error
@@ -312,7 +312,7 @@ static RetVal WriteInToFile(char *FileName)
    if (GetInode(FileName, &InodeNum) == 0) {
       PRINT("File name found and Inode = %d\n", InodeNum);
    } else {
-      PRINT ("Enter valid FileName\n");
+      PRINT("Enter valid FileName\n");
       return RET_ERR;
    }
 
@@ -377,7 +377,7 @@ static RetVal PrintFileContents(char *FileName)
       return RET_ERR;
    }
    if (GetInode(FileName, &InodeNum) == RET_ERR) {
-      PRINT ("FileName Not Found !!!\n");
+      PRINT("FileName Not Found !!!\n");
       return RET_ERR;
    }
    PRINT("File name found and InodeNum = %d\n", InodeNum);
@@ -436,7 +436,7 @@ static void ListFiles()
 
 /**
  * @fn     static int DeleteFile(char *FileName);
- * @brief  Function to Delete teh File Contents
+ * @brief  Function to Delete the File Contents
  * @param  FileName  Filename to be deleted
  * @return RET_OK on Success
  *         RET_ERR on Error
@@ -471,7 +471,7 @@ static RetVal DeleteFile(char *FileName)
 
 /**
  * @fn     int main();
- * @brief  Entery Point of Filesystem
+ * @brief  Entery Point of Filesystem simulator
  * @param  <none>
  * @return RET_OK on Success
  *         RET_ERR on Error

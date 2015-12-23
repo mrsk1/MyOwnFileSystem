@@ -57,3 +57,4 @@ clean:
 
 distclean:
 	rm -f `find . -iname 'cscope.*' -o -iname 'tags' -type f`
+	rm -rf $(OBJECTS) $(TARGET_APP)
