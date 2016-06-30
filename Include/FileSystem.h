@@ -61,7 +61,6 @@ struct inode {
    u_char fname[8];               //< Filename  of the File
 };
 
-static void init_fs(void);
 /* TODO:Need to Add the Fucntions with or without static ? */
 #endif
 

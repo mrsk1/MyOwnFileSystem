@@ -1,4 +1,5 @@
 
+[ ]local Variables should be intialized.
 [*]validate all the input param of all the function.
 [*]Define A return type of all the Function.
 [ ]Function name Do proper.
@@ -6,4 +7,4 @@
 [ ]Naming Convension of Variable.
 [*]Alligment of Variable declaration.
 [*]Spelling of Commenting -karthik
-[*] if case value checking must be constain == value
+[*] if case value checking must be constant == value

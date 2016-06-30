@@ -17,6 +17,7 @@
 # include <stdarg.h>
 # include <stdint.h>
 # include <stdlib.h>
+# include <unistd.h>
 # include "FileSystem.h"
 
 
@@ -40,39 +41,38 @@ static int UpdateSuperBlock(int UpdateSB, ...);
  */
 static void InitFS()
 {
-   if (posix_memalign(&fs, ALIGN, MB)) {
-      perror("posix_memalign failed");
-      exit(EXIT_FAILURE);
-   }
+	if (posix_memalign(&fs, ALIGN, MB)) {
+		perror("posix_memalign failed");
+		exit(EXIT_FAILURE);
+	}
 
-   sb	= (struct super_block *) fs;
-   dbm = (void *) sb + BLK_SIZE;
-   ibm = dbm + BLK_SIZE;
-   i_tab  = ibm + BLK_SIZE;
-   d_blks = (void *) i_tab + (INODES * sizeof(struct inode));
+	sb	= (struct super_block *) fs;
+	dbm = (void *) sb + BLK_SIZE;
+	ibm = dbm + BLK_SIZE;
+	i_tab  = ibm + BLK_SIZE;
+	d_blks = (void *) i_tab + (INODES * sizeof(struct inode));
 
+	NOPRINT("fs  = 0x%08X\n", (unsigned int)(intptr_t)fs);
+	NOPRINT("sb  = 0x%08X\n", (unsigned int)(intptr_t) sb);
+	NOPRINT("dbm = 0x%08X\n", (unsigned int)(intptr_t) dbm);
+	NOPRINT("ibm = 0x%08X\n", (unsigned int)(intptr_t) ibm);
+	NOPRINT("i_tab =  0x%08X\n", (unsigned int)(intptr_t) i_tab);
+	NOPRINT("d_blks = 0x%08X\n", (unsigned int)(intptr_t) d_blks);
+	/* Each inode represents one inode structure in inode table */
+	sb->total_inodes = INODES;
+	/* We have 1MB of total memory and blk size is 1KB so will have
+	   1024 blocks */
+	sb->total_datablocks = T_BLKS;	   sb->free_inodes = INODES;
+	sb->free_datablocks = T_BLKS -
+		(3 + (INODES / (BLK_SIZE / sizeof(struct inode))));
 
-   NOPRINT("fs  = 0x%08X\n", (unsigned int)(intptr_t)fs);
-   NOPRINT("sb  = 0x%08X\n", (unsigned int)(intptr_t) sb);
-   NOPRINT("dbm = 0x%08X\n", (unsigned int)(intptr_t) dbm);
-   NOPRINT("ibm = 0x%08X\n", (unsigned int)(intptr_t) ibm);
-   NOPRINT("i_tab =  0x%08X\n", (unsigned int)(intptr_t) i_tab);
-   NOPRINT("d_blks = 0x%08X\n", (unsigned int)(intptr_t) d_blks);
-   /* Each inode represents one inode structure in inode table */
-   sb->total_inodes = INODES;
-   /* We have 1MB of total memory and blk size is 1KB so will have
-      1024 blocks */
-   sb->total_datablocks = T_BLKS;	   sb->free_inodes = INODES;
-   sb->free_datablocks = T_BLKS -
-      (3 + (INODES / (BLK_SIZE / sizeof(struct inode))));
+	PRINT("sb->total_inodes = %d\n", sb->total_inodes);
+	PRINT("sb->total_datablocks = %d\n", sb->total_datablocks);
+	PRINT("sb->free_inodes	 = %d\n", sb->free_inodes);
+	PRINT("sb->free_datablocks = %d\n", sb->free_datablocks);
 
-   PRINT("sb->total_inodes = %d\n", sb->total_inodes);
-   PRINT("sb->total_datablocks = %d\n", sb->total_datablocks);
-   PRINT("sb->free_inodes	 = %d\n", sb->free_inodes);
-   PRINT("sb->free_datablocks = %d\n", sb->free_datablocks);
-
-   dbm = memset(dbm, 0, 128);
-   ibm = memset(ibm, 0, 128);
+	dbm = memset(dbm, 0, 128);
+	ibm = memset(ibm, 0, 128);
 }
 
 
@@ -84,16 +84,17 @@ static void InitFS()
  */
 static int GetPosition(void *Block)
 {
-   int *Ptr;
-   int Pos = 0;
+	int *Ptr = NULL;
+	int Pos = 0;
 
-   Ptr = (int*)Block;
-   while (Pos <= 1023) {
-      if (*Ptr & (1 << Pos))
-         Pos++;
-      else
-         return Pos;
-   }
+	Ptr = (int*)Block;
+	while (Pos <= 1023) {
+		if (*Ptr & (1 << Pos))
+			Pos++;
+		else
+			return Pos;
+	}
+	/** Need to handle the return in calling function as well here */
 }
 
 /**
@@ -106,28 +107,28 @@ static int GetPosition(void *Block)
  */
 static RetVal SetBit(void *Block, int Pos)
 {
-   int *Ptr;
-   int Move;
-   int SetPos;
+	int *Ptr = NULL;
+	int Move = -1;
+	int SetPos = -1;
 
-   if (NULL == Block){
-      printf("%s:Invalid Block  \n", __func__);
-      return RET_ERR;
-   }
-   if (-1 >= Pos){
-      printf("%s:Invalid Positoin %d \n", __func__, Pos);
-      return RET_ERR;
-   }
+	if (NULL == Block){
+		printf("%s:Invalid Block  \n", __func__);
+		return RET_ERR;
+	}
+	if (-1 >= Pos){
+		printf("%s:Invalid Positoin %d \n", __func__, Pos);
+		return RET_ERR;
+	}
 
-   Ptr = (int*)Block;
-   Move = Pos/32;
-   SetPos = Pos%32;
-   Ptr = Ptr + Move;
+	Ptr = (int*)Block;
+	Move = Pos/32;
+	SetPos = Pos%32;
+	Ptr = Ptr + Move;
 
-   *Ptr = *Ptr | (1 << SetPos);
-   if (*Ptr & (1 << SetPos))
-      return RET_OK;
-   return RET_ERR;
+	*Ptr = *Ptr | (1 << SetPos);
+	if (*Ptr & (1 << SetPos))
+		return RET_OK;
+	return RET_ERR;
 }
 
 /**
@@ -140,27 +141,27 @@ static RetVal SetBit(void *Block, int Pos)
  */
 static RetVal ClearBit(void *Block, int Pos)
 {
-   int mov;
-   int *Ptr;
-   int SetPos;
+	int mov = -1;
+	int *Ptr = NULL;
+	int SetPos = -1;
 
-   if (NULL == Block){
-      printf("%s:Invalid Block \n", __func__);
-      return RET_ERR;
-   }
-   if (-1 >= Pos){
-      printf("%s:Invalid Positoin %d \n", __func__, Pos);
-      return RET_ERR;
-   }
-   Ptr = (int*)Block;
-   mov = Pos/32;
-   SetPos = Pos%32;
-   Ptr = Ptr + mov;
+	if (NULL == Block){
+		printf("%s:Invalid Block \n", __func__);
+		return RET_ERR;
+	}
+	if (-1 >= Pos){
+		printf("%s:Invalid Positoin %d \n", __func__, Pos);
+		return RET_ERR;
+	}
+	Ptr = (int*)Block;
+	mov = Pos/32;
+	SetPos = Pos%32;
+	Ptr = Ptr + mov;
 
-   *Ptr = *Ptr & (~(1 << SetPos));
-   if (!(*Ptr & (1 << SetPos)))
-      return RET_OK;
-   return RET_ERR;
+	*Ptr = *Ptr & (~(1 << SetPos));
+	if (!(*Ptr & (1 << SetPos)))
+		return RET_OK;
+	return RET_ERR;
 }
 
 /**
@@ -173,22 +174,22 @@ static RetVal ClearBit(void *Block, int Pos)
  */
 static RetVal FillingITable(int Index, char *FileName)
 {
-   struct inode *TempInode;
+	struct inode *TempInode;
 
-   if ( RET_ERR == Index){
-      PRINT("%s Invalid index %d \n", __func__, Index);
-      return Index;
-   }
-   if ( NULL == FileName){
-      PRINT("%s Invalid FileName \n", __func__);
-      return RET_ERR;
-   }
+	if ( RET_ERR == Index){
+		PRINT("%s Invalid index %d \n", __func__, Index);
+		return Index;
+	}
+	if ( NULL == FileName){
+		PRINT("%s Invalid FileName \n", __func__);
+		return RET_ERR;
+	}
 
-   TempInode = i_tab + Index;
-   TempInode->i_no = Index;
-   strcpy(TempInode->fname, FileName);
-   NOPRINT("File name = %s\n", TempInode->fname);
-   return RET_OK;
+	TempInode = i_tab + Index;
+	TempInode->i_no = Index;
+	strcpy((char *)TempInode->fname, FileName);
+	NOPRINT("File name = %s\n", TempInode->fname);
+	return RET_OK;
 
 }
 
@@ -202,52 +203,27 @@ static RetVal FillingITable(int Index, char *FileName)
  */
 static RetVal UpdateSuperBlock(int UpdateSB, ...)
 {
-   int Pos;
-   va_list Ptr;
+	int Pos = -1;
+	va_list Ptr;
 
-   if (-1 >= UpdateSB){
-      PRINT("%s: Invalid UpdateSb = %d \n", __func__, UpdateSB);
-      return RET_ERR;
-   }
-   if (0 == UpdateSB)
-      sb->free_inodes = sb->free_inodes - 1;
-   else if (1 == UpdateSB){
-      va_start(Ptr, UpdateSB);
-      Pos = va_arg(Ptr, int);
-      //PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
-      sb->free_datablocks = sb->free_datablocks - Pos;
-   }else{
-      va_start(Ptr,UpdateSB);
-      Pos = va_arg(Ptr, int);
-      PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
-      sb->free_datablocks = sb->free_datablocks + Pos ;
-   }
-   return RET_OK;
-}
-
-/**
- * @fn     static int CreateFile(char *FileName);
- * @brief  Function to Create a file in Filesystem.
- * @param  FileName   Name of the file to be created.
- * @return RET_OK on Success
- *         RET_ERR on Error
- */
-static RetVal CreateFile(char *FileName)
-{
-   int Pos;
-   int UpdateSB = 0;
-
-   if (NULL == FileName){
-      PRINT("%s Invalid FileName \n", __func__);
-      return RET_ERR;
-   }
-   Pos = GetPosition(ibm);
-   NOPRINT("Pos = %d\n", Pos);
-   if (SetBit(ibm, Pos) == 0)
-      PRINT("bit is set successfuly\n");
-   FillingITable(Pos, FileName);
-   UpdateSuperBlock(UpdateSB, Pos);
-   return RET_OK;
+	if (-1 >= UpdateSB){
+		PRINT("%s: Invalid UpdateSb = %d \n", __func__, UpdateSB);
+		return RET_ERR;
+	}
+	if (0 == UpdateSB)
+		sb->free_inodes = sb->free_inodes - 1;
+	else if (1 == UpdateSB){
+		va_start(Ptr, UpdateSB);
+		Pos = va_arg(Ptr, int);
+		//PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
+		sb->free_datablocks = sb->free_datablocks - Pos;
+	}else{
+		va_start(Ptr,UpdateSB);
+		Pos = va_arg(Ptr, int);
+		PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
+		sb->free_datablocks = sb->free_datablocks + Pos ;
+	}
+	return RET_OK;
 }
 
 /**
@@ -260,29 +236,60 @@ static RetVal CreateFile(char *FileName)
  */
 static RetVal GetInode(char *FileName, int *InodeNum)
 {
-   int UsedInodes;
-   struct inode *TempInode;
+	int UsedInodes = -1;
+	struct inode *TempInode;
 
-   if (NULL == FileName){
-      PRINT("%s: Invalid Filename\n", __func__);
-      return RET_ERR;
-   }
-   if ( -1 >= *InodeNum){
-      PRINT("%s: Invalid InodNum %d\n", __func__, *InodeNum);
-      return RET_ERR;
-   }
-   TempInode = i_tab;
-   /* Get the inode, search in inode table for the corresponding filename */
-   UsedInodes = INODES - sb->free_inodes;
+	if (NULL == FileName){
+		PRINT("%s: Invalid Filename\n", __func__);
+		return RET_ERR;
+	}
+	if ( -1 >= *InodeNum){
+		PRINT("%s: Invalid InodeNum %d\n", __func__, *InodeNum);
+		return RET_ERR;
+	}
+	TempInode = i_tab;
+	/* Get the inode, search in inode table for the corresponding filename */
+	UsedInodes = INODES - sb->free_inodes;
 
-   while (UsedInodes--){
-      if (strcmp(FileName, TempInode->fname) == 0){
-         *InodeNum = TempInode->i_no;
-         return RET_OK;
-      }
-      TempInode++;
-   }
-   return RET_ERR;
+	while (UsedInodes--){
+		if (strcmp(FileName, (const char *)TempInode->fname) == 0){
+			*InodeNum = TempInode->i_no;
+			return RET_OK;
+		}
+		TempInode++;
+	}
+	return RET_ERR;
+}
+
+/**
+ * @fn     static int CreateFile(char *FileName);
+ * @brief  Function to Create a file in Filesystem.
+ * @param  FileName   Name of the file to be created.
+ * @return RET_OK on Success
+ *         RET_ERR on Error
+ */
+static RetVal CreateFile(char *FileName)
+{
+	int Pos = -1;
+	int UpdateSB = 0;
+	int InodeNum = 0;
+
+	if (NULL == FileName){
+		PRINT("%s Invalid FileName \n", __func__);
+		return RET_ERR;
+	}
+	/** TODO: Find the Duplicate file name */
+	if (GetInode(FileName, &InodeNum) == 0) {
+		PRINT("File Already Exists!!!!!\n");
+		return RET_ERR;
+	}
+	Pos = GetPosition(ibm);
+	NOPRINT("Pos = %d\n", Pos);
+	if (SetBit(ibm, Pos) == 0)
+		PRINT("bit is set successfuly\n");
+	FillingITable(Pos, FileName);
+	UpdateSuperBlock(UpdateSB, Pos);
+	return RET_OK;
 }
 
 /**
@@ -294,54 +301,60 @@ static RetVal GetInode(char *FileName, int *InodeNum)
  */
 static RetVal WriteInToFile(char *FileName)
 {
-   char c;
-   int Pos;
-   char *Buf;
-   int Count;
-   int InodeNum;
-   void *TempData;
-   unsigned char UpdateSB;
-   struct inode *TempInode;
+	char c;
+	int Pos = -1;
+	int i = -1;
+	char *Buf = NULL;
+	int Count = -1;
+	int InodeNum = 0;
+	void *TempData;
+	unsigned char UpdateSB;
+	struct inode *TempInode;
 
-   UpdateSB = 1;
-   Buf = NULL;
-   if (NULL == FileName){
-      PRINT("%s: Invalid Filename \n", __func__);
-      return RET_ERR;
-   }
-   if (GetInode(FileName, &InodeNum) == 0) {
-      PRINT("File name found and Inode = %d\n", InodeNum);
-   } else {
-      PRINT("Enter valid FileName\n");
-      return RET_ERR;
-   }
+	UpdateSB = 1;
+	Buf = NULL;
+	if (NULL == FileName){
+		PRINT("%s: Invalid Filename \n", __func__);
+		return RET_ERR;
+	}
+	if (GetInode(FileName, &InodeNum) == 0) {
+		PRINT("File name found and Inode = %d\n", InodeNum);
+	} else {
+		PRINT("Enter valid FileName\n");
+		return RET_ERR;
+	}
+	for (Count = 0;(c = getchar()) != EOF; Count++) {
+		Buf = (char*) realloc(Buf, Count + 1);
+		Buf[Count] = c;
+	}
 
-   for (Count = 0;(c = getchar()) != EOF; Count++) {
-      Buf = (char*) realloc(Buf, Count + 1);
-      Buf[Count] = c;
-   }
+	if ((c == EOF)&&(1 == Count)){ /** TODO: Count increses to 1 while Enter EOF ?? */
+		PRINT("Warning: File Content Can't Be empty!!!\n");
+		PRINT("No Content Written into file: %s\n",FileName);
+		return RET_ERR;
+	}
 
-   Pos = GetPosition(dbm);
-   if (SetBit(dbm, Pos) == 0)
-      PRINT("data bit is set successfuly\n");
+	Pos = GetPosition(dbm);
+	if (SetBit(dbm, Pos) == 0)
+		PRINT("data writen into file successfuly\n");
 
-   Count = sizeof(Buf) / BLK_SIZE;
-   if (sizeof(Buf) % BLK_SIZE != 0)
-      Count++;
+	Count = sizeof(Buf) / BLK_SIZE;
+	if (sizeof(Buf) % BLK_SIZE != 0)
+		Count++;
 
-   TempData = d_blks + (Pos * BLK_SIZE);
-   memcpy(TempData, Buf, strlen(Buf) + 1);
+	TempData = d_blks + (Pos * BLK_SIZE);
+	memcpy(TempData, Buf, strlen(Buf) + 1);
 
-   /* Update inode struct */
-   TempInode = i_tab + InodeNum;
-   TempInode->size = strlen(Buf) + 1 ;
-   TempInode->blk_used = Count;
+	/* Update inode struct */
+	TempInode = i_tab + InodeNum;
+	TempInode->size = strlen(Buf) + 1 ;
+	TempInode->blk_used = Count;
 
-   for (c = 0;c < Count; c++)
-      TempInode->blk[c] = Pos + c;
-   /* Updating super_block after allocating data */
-   UpdateSuperBlock(UpdateSB, Count);
-   return RET_OK;
+	for (i = 0;i < Count; i++)
+		TempInode->blk[i] = Pos + i;
+	/* Updating super_block after allocating data */
+	UpdateSuperBlock(UpdateSB, Count);
+	return RET_OK;
 }
 
 /**
@@ -352,10 +365,10 @@ static RetVal WriteInToFile(char *FileName)
  */
 static void DisplaySBDetails()
 {
-   PRINT("sb->total_inodes = %d\n", sb->total_inodes);
-   PRINT("sb->total_datablocks = %d\n", sb->total_datablocks);
-   PRINT("sb->free_inodes  = %d\n", sb->free_inodes);
-   PRINT("sb->free_datablocks = %d\n", sb->free_datablocks);
+	PRINT("sb->total_inodes = %d\n", sb->total_inodes);
+	PRINT("sb->total_datablocks = %d\n", sb->total_datablocks);
+	PRINT("sb->free_inodes  = %d\n", sb->free_inodes);
+	PRINT("sb->free_datablocks = %d\n", sb->free_datablocks);
 }
 
 /**
@@ -367,26 +380,31 @@ static void DisplaySBDetails()
  */
 static RetVal PrintFileContents(char *FileName)
 {
-   void *Data;
-   int InodeNum;
-   unsigned short Count;
-   struct inode *TempInode;
+	void *Data;
+	int InodeNum = 0;
+	unsigned short Count;
+	struct inode *TempInode;
 
-   if (NULL == FileName){
-      PRINT("%s:Invalid FileName \n", __func__);
-      return RET_ERR;
-   }
-   if (GetInode(FileName, &InodeNum) == RET_ERR) {
-      PRINT("FileName Not Found !!!\n");
-      return RET_ERR;
-   }
-   PRINT("File name found and InodeNum = %d\n", InodeNum);
-   TempInode = i_tab + InodeNum;
-   for (Count = 0; Count < TempInode->blk_used; Count++){
-      Data = d_blks + (TempInode->blk[Count] * BLK_SIZE);
-      write(1, Data,BLK_SIZE);
-   }
-   return RET_OK;
+	if (NULL == FileName){
+		PRINT("%s:Invalid FileName \n", __func__);
+		return RET_ERR;
+	}
+	if (GetInode(FileName, &InodeNum) == RET_ERR) {
+		PRINT("FileName Not Found !!!\n");
+		return RET_ERR;
+	}
+	PRINT("File name found and InodeNum = %d\n", InodeNum);
+	TempInode = i_tab + InodeNum;
+	if (TempInode->blk_used == 0)
+	{
+		PRINT("File is EMPTY!!!!\n");
+		return RET_OK;
+	}
+	for (Count = 0; Count < TempInode->blk_used; Count++){
+		Data = d_blks + (TempInode->blk[Count] * BLK_SIZE);
+		write(1, Data,BLK_SIZE);
+	}
+	return RET_OK;
 }
 
 /**
@@ -398,18 +416,21 @@ static RetVal PrintFileContents(char *FileName)
  */
 static int DisplayFileDetails(int Count)
 {
-   struct inode *TempInode ;
+	struct inode *TempInode ;
 
-   if ( -1 >= Count){
-      PRINT("%s: Invalid Count %d \n", __func__, Count);
-      return RET_ERR;
-   }
-   TempInode = i_tab + Count;
-   PRINT("file name = %s\n",TempInode->fname);
-   PRINT("inode num = %d\n",TempInode->i_no);
-   PRINT("file size = %d\n",TempInode->size);
-   PRINT("blks used = %d\n",TempInode->blk_used);
-   return RET_OK;
+	if ( -1 >= Count){
+		PRINT("%s: Invalid Count %d \n", __func__, Count);
+		return RET_ERR;
+	}
+	TempInode = i_tab + Count;
+	PRINT("%s\n",TempInode->fname);
+#if 0
+	PRINT("file name = %s\n",TempInode->fname);
+	PRINT("inode num = %d\n",TempInode->i_no);
+	PRINT("file size = %d\n",TempInode->size);
+	PRINT("blks used = %d\n",TempInode->blk_used);
+#endif
+	return RET_OK;
 }
 
 /**
@@ -420,17 +441,17 @@ static int DisplayFileDetails(int Count)
  */
 static void ListFiles()
 {
-   int *Temp ;
-   short int Count;
+	int *Temp ;
+	short int Count = -1;
 
-   Temp = (int *)ibm;
-   for(Count = 0; Count < BLK_SIZE; Count++){
-      if (((Count%32) == 0) && (Count != 0))
-         Temp++;
-      if ((*Temp)&(1<<Count)){
-         DisplayFileDetails(Count);
-      }
-   }
+	Temp = (int *)ibm;
+	for(Count = 0; Count < BLK_SIZE; Count++){
+		if (((Count%32) == 0) && (Count != 0))
+			Temp++;
+		if ((*Temp)&(1<<Count)){
+			DisplayFileDetails(Count);
+		}
+	}
 
 }
 
@@ -443,30 +464,30 @@ static void ListFiles()
  */
 static RetVal DeleteFile(char *FileName)
 {
-   int i;
-   int InodeNum;
-   struct inode *TempInode;
+	int i = -1;
+	int InodeNum = -1;
+	struct inode *TempInode;
 
-   InodeNum = 1;
-   if ( NULL == FileName){
-      PRINT("%s: Invalid FileName \n", __func__);
-      return RET_ERR;
-   }
-   if (GetInode(FileName,&InodeNum) == RET_ERR){
-      PRINT("Enter Vaild File name \n");
-      return RET_ERR;
-   }
+	InodeNum = 1;
+	if ( NULL == FileName){
+		PRINT("%s: Invalid FileName \n", __func__);
+		return RET_ERR;
+	}
+	if (GetInode(FileName,&InodeNum) == RET_ERR){
+		PRINT("Enter Vaild File name \n");
+		return RET_ERR;
+	}
 
-   /* Get the Inode */
-   TempInode = i_tab + InodeNum ;
-   /* Clear All Data blocks bitmap */
-   for (i = 0; i < TempInode->blk_used ; i++)
-      ClearBit(dbm, TempInode->blk[i]);
-   /* Clear inode bitmap */
-   ClearBit(ibm, InodeNum);
-   UpdateSuperBlock(2,TempInode->blk_used);
-   memset(TempInode,'\0',sizeof(struct inode));
-   return RET_OK;
+	/* Get the Inode */
+	TempInode = i_tab + InodeNum ;
+	/* Clear All Data blocks bitmap */
+	for (i = 0; i < TempInode->blk_used ; i++)
+		ClearBit(dbm, TempInode->blk[i]);
+	/* Clear inode bitmap */
+	ClearBit(ibm, InodeNum);
+	UpdateSuperBlock(2,TempInode->blk_used);
+	memset(TempInode,'\0',sizeof(struct inode));
+	return RET_OK;
 }
 
 /**
@@ -478,53 +499,56 @@ static RetVal DeleteFile(char *FileName)
  */
 int main()
 {
-   int Choice;
-   char FileName[8];
-   int count;
+	int Choice  = -1;
+	char FileName[8] = {0};
 
-   InitFS();
-   while(1){
-      PRINT("\n#################Enter choice:\n");
-      PRINT("1->Create\n");
-      PRINT("2->Write\n");
-      PRINT("3->Super\n");
-      PRINT("4->Display\n");
-      PRINT("5->List Files\n");
-      PRINT("6->Delete File\n");
-      scanf("%d", &Choice);
+	/** TODO: Do Valid Reading from the User */
+	/** Input Validataion */
+	InitFS();
+	while(1){
+		PRINT("\n#################\n");
+		PRINT("1->Create\n");
+		PRINT("2->Write\n");
+		PRINT("3->Super\n");
+		PRINT("4->Display\n");
+		PRINT("5->List Files\n");
+		PRINT("6->Delete File\n");
+		PRINT("###################\n");
+		PRINT("Enter the choice:  ");
+		scanf("%d", &Choice);
 
-      switch (Choice)
-      {
-         case 1:
-            PRINT("Enter the File Name:");
-            scanf("%s",FileName);
-            CreateFile(FileName);
-            break;
-         case 2:
-            PRINT("To which file you want enter:");
-            scanf("%s", FileName);
-            WriteInToFile(FileName);
-            break;
-         case 3:
-            DisplaySBDetails();
-            break;
-         case 4:
-            PRINT("Enter the File Name:");
-            scanf("%s", FileName);
-            PrintFileContents(FileName);
-            break;
-         case 5:
-            ListFiles();
-            break;
-         case 6:
-            PRINT("Enter the File Name To Delete:");
-            scanf("%s", FileName);
-            DeleteFile(FileName);
-            break;
-         default:
-            PRINT("Enter valid option\n");
-            break;
-      }
-   }
-   return 0;
+		switch (Choice)
+		{
+			case 1:
+				PRINT("Enter the File Name:");
+				scanf("%s",FileName);
+				CreateFile(FileName);
+				break;
+			case 2:
+				PRINT("To which file you want enter:");
+				scanf("%s", FileName);
+				WriteInToFile(FileName);
+				break;
+			case 3:
+				DisplaySBDetails();
+				break;
+			case 4:
+				PRINT("Enter the File Name:");
+				scanf("%s", FileName);
+				PrintFileContents(FileName);
+				break;
+			case 5:
+				ListFiles();
+				break;
+			case 6:
+				PRINT("Enter the File Name To Delete:");
+				scanf("%s", FileName);
+				DeleteFile(FileName);
+				break;
+			default:
+				PRINT("Enter valid option\n");
+				break;
+		}
+	}
+	return 0;
 }
