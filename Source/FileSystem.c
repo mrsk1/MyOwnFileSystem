@@ -9,7 +9,8 @@
  *  \n==== History ============================================================
  *  date        Author     version   action
  *  ---------------------------------------------------------------------------
- * 21-Dec-2015 Karthik M              Commenting the Functions
+ * 14-Jul-2016 Karthik M              Fixing Issues Related to Inode Full 
+ 										input validation
  *******************************************************************************/
 
 # include <stdio.h>
@@ -18,11 +19,10 @@
 # include <stdint.h>
 # include <stdlib.h>
 # include <unistd.h>
+# include <ctype.h>
 # include "FileSystem.h"
 
 
-#define PRINT printf
-#define NOPRINT(...)
 void *fs;					// file system
 void *dbm;
 void *ibm;
@@ -75,6 +75,19 @@ static void InitFS()
 	ibm = memset(ibm, 0, 128);
 }
 
+/**
+ * @fn     static int IsInodeFull();
+ * @brief  Function to chech the Inode is full or not
+ * @return 0 on inodes is not full
+ 1 on inodes are full
+ */
+static int IsInodeFull()
+{
+	if (0 ==  sb->free_inodes)
+		return 1;
+	else
+		return 0;
+}
 
 /**
  * @fn     static int GetPosition(void *block);
@@ -86,15 +99,24 @@ static int GetPosition(void *Block)
 {
 	int *Ptr = NULL;
 	int Pos = 0;
+	unsigned int BitCount = 0;
 
 	Ptr = (int*)Block;
-	while (Pos <= 1023) {
-		if (*Ptr & (1 << Pos))
+	while (Pos < BLK_SIZE) {
+		if ((Pos != 0) && (Pos % 32 == 0)){
+			BitCount = Pos%32;
+			Ptr++;
+		}
+		if (*Ptr & (1 << BitCount)){
 			Pos++;
-		else
+			BitCount++;
+		}
+		else{
 			return Pos;
+		}
 	}
-	/** Need to handle the return in calling function as well here */
+
+	return RET_ERR;
 }
 
 /**
@@ -112,11 +134,11 @@ static RetVal SetBit(void *Block, int Pos)
 	int SetPos = -1;
 
 	if (NULL == Block){
-		printf("%s:Invalid Block  \n", __func__);
+		PRINT("%s:Invalid Block  \n", __func__);
 		return RET_ERR;
 	}
 	if (-1 >= Pos){
-		printf("%s:Invalid Positoin %d \n", __func__, Pos);
+		PRINT("%s:Invalid Positoin %d \n", __func__, Pos);
 		return RET_ERR;
 	}
 
@@ -146,11 +168,11 @@ static RetVal ClearBit(void *Block, int Pos)
 	int SetPos = -1;
 
 	if (NULL == Block){
-		printf("%s:Invalid Block \n", __func__);
+		PRINT("%s:Invalid Block \n", __func__);
 		return RET_ERR;
 	}
 	if (-1 >= Pos){
-		printf("%s:Invalid Positoin %d \n", __func__, Pos);
+		PRINT("%s:Invalid Positoin %d \n", __func__, Pos);
 		return RET_ERR;
 	}
 	Ptr = (int*)Block;
@@ -213,15 +235,19 @@ static RetVal UpdateSuperBlock(int UpdateSB, ...)
 	if (0 == UpdateSB)
 		sb->free_inodes = sb->free_inodes - 1;
 	else if (1 == UpdateSB){
+		/** update the Data blocks are used for file  creation*/
 		va_start(Ptr, UpdateSB);
 		Pos = va_arg(Ptr, int);
 		//PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
 		sb->free_datablocks = sb->free_datablocks - Pos;
 	}else{
+		/** update the Data blocks are used for file deletion*/
 		va_start(Ptr,UpdateSB);
+		/** reusing pos as no of used blocks */
 		Pos = va_arg(Ptr, int);
-		PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
+		PRINT("File Found ");
 		sb->free_datablocks = sb->free_datablocks + Pos ;
+		sb->free_inodes = sb->free_inodes + 1;
 	}
 	return RET_OK;
 }
@@ -278,17 +304,25 @@ static RetVal CreateFile(char *FileName)
 		PRINT("%s Invalid FileName \n", __func__);
 		return RET_ERR;
 	}
-	/** TODO: Find the Duplicate file name */
 	if (GetInode(FileName, &InodeNum) == 0) {
 		PRINT("File Already Exists!!!!!\n");
 		return RET_ERR;
 	}
+	if (IsInodeFull()){
+		PRINT("Inodes are Full can't Create files anymore !!!\n");
+		return RET_ERR;
+	}
 	Pos = GetPosition(ibm);
-	NOPRINT("Pos = %d\n", Pos);
+	PRINT("Pos = %d\n", Pos);
+	if (Pos == BLK_SIZE){
+		PRINT(" Inode is FULL !!! \n");
+		return RET_ERR;
+	}
 	if (SetBit(ibm, Pos) == 0)
-		PRINT("bit is set successfuly\n");
+		PRINT("setbit success \n");
 	FillingITable(Pos, FileName);
 	UpdateSuperBlock(UpdateSB, Pos);
+	PRINT("file Create Successfully \n");
 	return RET_OK;
 }
 
@@ -333,7 +367,7 @@ static RetVal WriteInToFile(char *FileName)
 		PRINT("No Content Written into file: %s\n",FileName);
 		return RET_ERR;
 	}
-
+	/** TODO: handle the Full data blocks */
 	Pos = GetPosition(dbm);
 	if (SetBit(dbm, Pos) == 0)
 		PRINT("data writen into file successfuly\n");
@@ -443,6 +477,7 @@ static void ListFiles()
 {
 	int *Temp ;
 	short int Count = -1;
+	unsigned char foundfile = 0;
 
 	Temp = (int *)ibm;
 	for(Count = 0; Count < BLK_SIZE; Count++){
@@ -450,7 +485,11 @@ static void ListFiles()
 			Temp++;
 		if ((*Temp)&(1<<Count)){
 			DisplayFileDetails(Count);
+			foundfile = 1;
 		}
+	}
+	if (!foundfile){
+		PRINT("No file to Display!!!\n");
 	}
 
 }
@@ -491,6 +530,75 @@ static RetVal DeleteFile(char *FileName)
 }
 
 /**
+ * @fn     static RetVal GetNumber(int *value)
+ * @brief  Function to Validate Input option
+ * @param  value  Return the  number 
+ * @return RET_OK on Success
+ *         RET_ERR on Error
+ */
+static RetVal GetNumber(int * Value)
+{
+	short count = 0;                                                               
+	short num = 0;                                                                 
+	char data[LINE_MAX] = {0};
+
+	if(fgets(data, LINE_MAX, stdin) == 0){                                           
+		PRINT("\nNo input found !!!\n");                                       
+		return RET_ERR;
+	}                                                                           
+
+	data[strlen(data)-1] = '\0';                                                   
+	count = strlen(data);                                                        
+
+	unsigned short  nonum = 0;                                                     
+	for( num = 0 ; num < count ; num++){                                           
+		if ((isalpha(data[num]) != 0) || (iscntrl(data[num]) != 0)){               
+			nonum = 1;                                                             
+			break;                                                                 
+		}                                                                          
+	}                                                                              
+	if (nonum)                                                                     
+		return RET_ERR;                                                                 
+	*Value = atoi(data);
+	return RET_OK;      
+}
+
+/**
+ * @fn     static RetVal GetFileName(char *File)
+ * @brief  Function to Get the Valid file name from user
+ * @param  File  Return the Valid filename
+ * @return RET_OK on Success
+ *         RET_ERR on Error
+ */
+
+static RetVal GetFileName(char *File)
+{
+	short count = 0;                                                               
+	short num = 0;                                                                 
+	char data[LINE_MAX] = {0};
+	unsigned short  nofile = 0;                                                     
+
+	if(fgets(data, LINE_MAX, stdin) == 0){                                           
+		PRINT("\nNo input found !!!\n");                                       
+		return RET_ERR;
+	}                                                                           
+
+	data[strlen(data)-1] = '\0';                                                   
+	count = strlen(data);                                                        
+	/** TODO:validate for File size */
+	for( num = 0 ; num < count ; num++){                                           
+		if ((iscntrl(data[num]) != 0)){               
+			nofile = 1;                                                             
+			break;                                                                 
+		}                                                                          
+	}                                                                              
+	if (nofile)                                                                     
+		return RET_ERR;                                                                 
+	memcpy(File,data, count+1);
+	return RET_OK;      
+}
+
+/**
  * @fn     int main();
  * @brief  Entery Point of Filesystem simulator
  * @param  <none>
@@ -502,8 +610,6 @@ int main()
 	int Choice  = -1;
 	char FileName[8] = {0};
 
-	/** TODO: Do Valid Reading from the User */
-	/** Input Validataion */
 	InitFS();
 	while(1){
 		PRINT("\n#################\n");
@@ -513,20 +619,53 @@ int main()
 		PRINT("4->Display\n");
 		PRINT("5->List Files\n");
 		PRINT("6->Delete File\n");
+		PRINT("7->Exit Application\n");
 		PRINT("###################\n");
 		PRINT("Enter the choice:  ");
-		scanf("%d", &Choice);
 
+		if (GetNumber(&Choice) == RET_ERR){
+			PRINT("\nPlease Enter Number\n");                                       
+			continue ;
+		}
+
+		//#define DEBUG
 		switch (Choice)
 		{
 			case 1:
+#ifdef DEBUG
+				printf(" 1 -> auto create 2 -> manual create \n");
+				int mynum = 0;
+				GetNumber(&mynum);
+				if ( 1 == mynum){
+					/** Testing the files Should Create more than 1024 */
+					int temp = 0;
+					char tempfile[8] = {0};
+					for (temp= 0 ; temp < 1026 ; temp++){
+						sprintf(tempfile,"%d",temp);
+						PRINT(" file = %s \n",tempfile);
+						CreateFile(tempfile);
+					}
+				}else {
+					PRINT("Enter the File Name:");
+					GetFileName(FileName);
+					CreateFile(FileName);
+				}
+#else
 				PRINT("Enter the File Name:");
-				scanf("%s",FileName);
+				if (GetFileName(FileName) == RET_ERR){
+					PRINT(" Invalid File Name \n");
+					continue ;
+				}
 				CreateFile(FileName);
+#endif
 				break;
+
 			case 2:
 				PRINT("To which file you want enter:");
-				scanf("%s", FileName);
+				if (GetFileName(FileName) == RET_ERR){
+					PRINT(" Invalid File Name \n");
+					continue ;
+				}
 				WriteInToFile(FileName);
 				break;
 			case 3:
@@ -534,7 +673,10 @@ int main()
 				break;
 			case 4:
 				PRINT("Enter the File Name:");
-				scanf("%s", FileName);
+				if (GetFileName(FileName) == RET_ERR){
+					PRINT(" Invalid File Name \n");
+					continue ;
+				}
 				PrintFileContents(FileName);
 				break;
 			case 5:
@@ -542,11 +684,18 @@ int main()
 				break;
 			case 6:
 				PRINT("Enter the File Name To Delete:");
-				scanf("%s", FileName);
-				DeleteFile(FileName);
+				if (GetFileName(FileName) == RET_ERR){
+					PRINT(" Invalid File Name \n");
+					continue ;
+				}
+				if (DeleteFile(FileName) == RET_OK)
+					PRINT("File deleted Succesfully \n");
 				break;
+			case 7:
+				free(fs);
+				exit(0);
 			default:
-				PRINT("Enter valid option\n");
+				PRINT("\nEnter valid option\n");
 				break;
 		}
 	}

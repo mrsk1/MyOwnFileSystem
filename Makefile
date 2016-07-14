@@ -21,7 +21,7 @@ else
 endif 
 
 
-.PHONY: clean
+.PHONY: clean distclean
 
 TARGET_APP= FileSystem
 
@@ -55,6 +55,7 @@ ${OBJDIR}%.o:%.c  FileSystem.h
 
 clean:
 	rm -rf $(OBJECTS) $(TARGET_APP)
+
 
 distclean:
 	rm -f `find . -iname 'cscope.*' -o -iname 'tags' -type f`

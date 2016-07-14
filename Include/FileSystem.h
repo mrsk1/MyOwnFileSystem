@@ -9,7 +9,7 @@
  *  \n==== History ============================================================
  *  date        Author     version   action
  *  ---------------------------------------------------------------------------
- * 23-Dec-2015 Karthik M              Commenting the Header Detaiils
+ * 14-Jul-2016 Karthik M              Adding Debug  Macros
  *******************************************************************************/
 
 
@@ -26,6 +26,12 @@
 #define INODES 1024
 /* Total Block Count */
 #define T_BLKS	1024
+/* buffer MAX lengyh */
+#define LINE_MAX 100
+
+#define PRINT printf
+#define DB_PRINT printf
+#define NOPRINT(...)
 
 typedef unsigned int u_int;
 typedef unsigned short u_short;
