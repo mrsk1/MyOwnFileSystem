@@ -16,6 +16,10 @@
 #ifndef _FILESYSTEM_H
 #define _FILESYSTEM_H
 
+/* buffer MAX lengyh */
+#define LINE_MAX 100
+/* File name length */
+#define FNAME_LEN 8
 /* Mega Byte Value */
 #define MB (1024 * 1024)
 /* Alignment Range */
@@ -26,8 +30,6 @@
 #define INODES 1024
 /* Total Block Count */
 #define T_BLKS	1024
-/* buffer MAX lengyh */
-#define LINE_MAX 100
 
 #define PRINT printf
 #define DB_PRINT printf
@@ -41,8 +43,8 @@ typedef unsigned char u_char;
  * @brief Enum To Check with the Return State
  */
 enum RetValue {
-   RET_ERR = -1,                    //<   Error State
-   RET_OK                           //<   Ok State
+   RET_ERR = -1,                    //<   -1 Error State
+   RET_OK                           //<    0 Ok State
 };
 typedef enum RetValue RetVal;
 
@@ -64,7 +66,7 @@ struct inode {
    u_int size:12;                 //< Size of the File
    u_int blk_used:3;              //< Number of Blks used for the File
    u_short blk[5];                //< Index of the Blks
-   u_char fname[8];               //< Filename  of the File
+   u_char fname[FNAME_LEN];               //< Filename  of the File
 };
 
 /* TODO:Need to Add the Fucntions with or without static ? */
