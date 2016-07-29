@@ -23,14 +23,15 @@
 # include "FileSystem.h"
 
 
-void *fs;					// file system
-void *dbm;
-void *ibm;
-struct super_block *sb;		// super block
-struct inode *i_tab;		// table of inode structure
-void *d_blks;
+void *fs;					/** ptr to file system */
+void *dbm;					/** ptr for Data block bitmap */
+void *ibm;					/** ptr for inode bitmap */
+struct super_block *sb;		/** ptr to super block */
+struct inode *i_tab;		/** ptr for inode table  */
+void *d_blks;				/** ptr to data blocks */
 int UpdateSB = 0;
 
+static void DisplaySBDetails();
 static int UpdateSuperBlock(int UpdateSB, ...);
 
 /**
@@ -67,10 +68,7 @@ static void InitFS()
 	sb->free_datablocks = T_BLKS -
 		(3 + (INODES / (BLK_SIZE / sizeof(struct inode))));
 
-	PRINT("sb->total_inodes = %d\n", sb->total_inodes);
-	PRINT("sb->total_datablocks = %d\n", sb->total_datablocks);
-	PRINT("sb->free_inodes	 = %d\n", sb->free_inodes);
-	PRINT("sb->free_datablocks = %d\n", sb->free_datablocks);
+	DisplaySBDetails();
 
 	dbm = memset(dbm, 0, 128);
 	ibm = memset(ibm, 0, 128);
@@ -239,7 +237,7 @@ static RetVal UpdateSuperBlock(int UpdateSB, ...)
 		/** update the Data blocks are used for file  creation*/
 		va_start(Ptr, UpdateSB);
 		Pos = va_arg(Ptr, int);
-		//PRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
+		NOPRINT("UpdateSB = %d Pos = %d\n", UpdateSB, Pos);
 		sb->free_datablocks = sb->free_datablocks - Pos;
 	}else{
 		/** update the Data blocks are used for file deletion*/
@@ -327,6 +325,13 @@ static RetVal CreateFile(char *FileName)
 	return RET_OK;
 }
 
+/**
+ * @fn     static RetVal WriteInToFile(char *FileName)
+ * @brief  Function to write the Content into file
+ * @param  FileName   Name of the file to be created.
+ * @return RET_OK on Success
+ *         RET_ERR on Error
+ */
 static RetVal WriteInToFile(char *FileName)
 {
 	char c;
@@ -346,7 +351,7 @@ static RetVal WriteInToFile(char *FileName)
 		return RET_ERR;
 	}
 	if (GetInode(FileName, &InodeNum) == 0) {
-		PRINT("File name found and Inode = %d\n", InodeNum);
+		PRINT("File found at Inode  pos = %d\n", InodeNum);
 	} else {
 		PRINT("Enter valid FileName\n");
 		return RET_ERR;
@@ -356,6 +361,7 @@ static RetVal WriteInToFile(char *FileName)
 	TempInode = i_tab + InodeNum;
 	/** if inode already present update the datablocks used */
 	if ( TempInode->size != 0){
+		/** TODO: Need to find  FillDataBlocks propery */
 		FillDataBlocks = TempInode->blk_used -1 ;
 		if ( (TempInode -> size)% BLK_SIZE != 0){
 			/** size is not aligned with the block size */
@@ -365,9 +371,7 @@ static RetVal WriteInToFile(char *FileName)
 		}
 		DB_PRINT("file has already have some data \n");
 	}
-	/* TODO: Storing into file is not proper */
 	for (Count = 0;(c = getchar()) != EOF; Count++) {
-		/** TODO: update blk_used datablocks Index */
 		if ( ((0 != SizeLeft)&& (Count == (SizeLeft-1))) ||(Count == BLK_SIZE -1) ){
 			if (FillDataBlocks == 5){
 				PRINT(" Data block limits is over can't fill more data \n");
@@ -379,14 +383,13 @@ static RetVal WriteInToFile(char *FileName)
 				NOPRINT("\n ***data blk index = %d \n",TempInode->blk[FillDataBlocks]);
 				TempData = d_blks + (TempInode->blk[FillDataBlocks] * BLK_SIZE);
 				memcpy(TempData +( TempInode ->size % BLK_SIZE), Buf, Count);
-				//TempInode->size += SizeLeft ;
 				SizeLeft = 0;
 			}
 			if( Count == BLK_SIZE -1){
 				/** Keep track of total datablocks count */
 				NOPRINT("\n\n ***data Exceeds one block Creating a another DATABLOCK ** \n\n");
 				Pos = GetPosition(dbm);
-				NOPRINT(" pos of free data block insdie block full = %d \n",Pos);
+				NOPRINT("\n\npos of free data block going to write = %d \n",Pos);
 				if (SetBit(dbm, Pos) == 0)
 					PRINT("data writen into file successfuly\n");
 				/** update the inode */
@@ -394,9 +397,7 @@ static RetVal WriteInToFile(char *FileName)
 				TempInode->blk_used = FillDataBlocks +1;
 				TempInode->blk[FillDataBlocks] = Pos;
 				memcpy(TempData, Buf, Count);
-				//	TempInode->size += BLK_SIZE ;
 				/** update the datablocks count */
-				//			FillDataBlocks++;
 			}
 			TempInode->size += (Count+1);
 			FillDataBlocks++;
@@ -405,49 +406,6 @@ static RetVal WriteInToFile(char *FileName)
 			memset(Buf,'\0',BLK_SIZE);
 		}
 
-
-#if 0
-		if ( (0 != SizeLeft)&& (Count == (SizeLeft-1)) ){
-			if (FillDataBlocks == 5){
-				PRINT(" Data block limits is over can't fill more data \n");
-				return RET_ERR;
-			}
-			DB_PRINT("\n\n ***data Exceeds Remaining Datablocks DATABLOCK ** \n\n");
-			TempInode->size += SizeLeft ;
-			TempData = d_blks + (TempInode->blk[FillDataBlocks] * BLK_SIZE);
-			NOPRINT("\n ***data blk index = %d \n",TempInode->blk[FillDataBlocks]);
-			memcpy(TempData +( TempInode ->size % BLK_SIZE), Buf, Count);
-			/** update the datablocks count */
-			Count = 0;
-			memset(Buf,'\0',BLK_SIZE);
-			FillDataBlocks++;
-			SizeLeft = 0;
-
-		}
-		else if( Count == BLK_SIZE -1){
-			/** Keep track of total datablocks count */
-			if (FillDataBlocks == 5){
-				PRINT(" Data block limits is over can't fill more data \n");
-				return RET_ERR;
-			}
-			NOPRINT("\n\n ***data Exceeds one block Creating a another DATABLOCK ** \n\n");
-			Pos = GetPosition(dbm);
-			NOPRINT(" pos of free data block insdie block full = %d \n",Pos);
-			if (SetBit(dbm, Pos) == 0)
-				PRINT("data writen into file successfuly\n");
-			/** copy the Data blocks contents */
-			TempData = d_blks + (Pos * BLK_SIZE);
-			memcpy(TempData, Buf, Count);
-			/** update the inode */
-			TempInode->size += BLK_SIZE ;
-			TempInode->blk_used = FillDataBlocks +1;
-			TempInode->blk[FillDataBlocks] = Pos;
-			/** update the datablocks count */
-			Count = 0;
-			memset(Buf,'\0',BLK_SIZE);
-			FillDataBlocks++;
-		}
-#endif
 		Buf[Count] = c;
 	}
 	if(c == EOF){
@@ -462,23 +420,20 @@ static RetVal WriteInToFile(char *FileName)
 		PRINT(" Data block limits is over can't fill more data \n");
 		return RET_ERR;
 	}
-	/** TODO: handle the Full data blocks */
 	if (0 != SizeLeft ){
 		/** if the data is less than leftsize and file already has some data*/
-		DB_PRINT("\n\n ***Remaining Datablocks is not Full writeing minimal data into file** \n\n");
-		NOPRINT("\n Count = %d \n",Count);
+		DB_PRINT("\n\n ***Remaining Datablocks is not Full writeing minimal data into file** \n");
 		TempData = d_blks + (TempInode->blk[FillDataBlocks] * BLK_SIZE);
 		memcpy(TempData +( TempInode ->size % BLK_SIZE), Buf, Count);
 	} else {
 		Pos = GetPosition(dbm);
-		DB_PRINT(" pos of free data block  = %d \n",Pos);
+		DB_PRINT("\n\npos of  data block going to write = %d \n\n",Pos);
 		if (SetBit(dbm, Pos) == 0)
 			PRINT("data writen into file successfuly\n");
 		TempData = d_blks + (Pos * BLK_SIZE);
 		memcpy(TempData, Buf, Count);
 		TempInode->blk[FillDataBlocks] = Pos;
 		TempInode->blk_used = FillDataBlocks +1;
-	//	TempInode->size += Count;
 	}
 	TempInode->size += (Count +1) ;
 	NOPRINT("no of data blocks used =%d \n",FillDataBlocks +1 );
@@ -494,10 +449,12 @@ static RetVal WriteInToFile(char *FileName)
  */
 static void DisplaySBDetails()
 {
-	PRINT("sb->total_inodes = %d\n", sb->total_inodes);
-	PRINT("sb->total_datablocks = %d\n", sb->total_datablocks);
-	PRINT("sb->free_inodes  = %d\n", sb->free_inodes);
-	PRINT("sb->free_datablocks = %d\n", sb->free_datablocks);
+	PRINT("+----------------------------+\n");
+	PRINT("|sb->total_inodes     = %4d |\n", sb->total_inodes);
+	PRINT("|sb->total_datablocks = %4d |\n", sb->total_datablocks);
+	PRINT("|sb->free_inodes      = %4d |\n", sb->free_inodes);
+	PRINT("|sb->free_datablocks  = %4d |\n", sb->free_datablocks);
+	PRINT("+----------------------------+\n");
 }
 
 /**
@@ -522,17 +479,20 @@ static RetVal PrintFileContents(char *FileName)
 		PRINT("FileName Not Found !!!\n");
 		return RET_ERR;
 	}
-	PRINT("File name found and InodeNum = %d\n", InodeNum);
+	PRINT("File found at Inode  pos = %d\n", InodeNum);
 	TempInode = i_tab + InodeNum;
 	if (TempInode->blk_used == 0)
 	{
 		PRINT("File is EMPTY!!!!\n");
 		return RET_OK;
 	}
+	PRINT("file size = %d \n",TempInode->size);
+	printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
 	for (Count = 0; Count < TempInode->blk_used; Count++){
 		Data = d_blks + (TempInode->blk[Count] * BLK_SIZE);
 		write(1, Data,BLK_SIZE);
 	}
+	printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
 	return RET_OK;
 }
 
@@ -552,13 +512,8 @@ static int DisplayFileDetails(int Count)
 		return RET_ERR;
 	}
 	TempInode = i_tab + Count;
-	PRINT("%s\n",TempInode->fname);
-#if 0
-	PRINT("file name = %s\n",TempInode->fname);
-	PRINT("inode num = %d\n",TempInode->i_no);
-	PRINT("file size = %d\n",TempInode->size);
-	PRINT("blks used = %d\n",TempInode->blk_used);
-#endif
+	PRINT("%5d %4d %7d %8s\n",TempInode->i_no,TempInode->size,
+								TempInode->blk_used,TempInode->fname);
 	return RET_OK;
 }
 
@@ -575,6 +530,8 @@ static void ListFiles()
 	unsigned char foundfile = 0;
 
 	Temp = (int *)ibm;
+
+	PRINT("inode size blk_used filename\n");
 	for(Count = 0; Count < BLK_SIZE; Count++){
 		if (((Count%32) == 0) && (Count != 0))
 			Temp++;

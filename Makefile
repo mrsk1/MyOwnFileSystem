@@ -52,7 +52,10 @@ ${OBJDIR}%.o:%.c  FileSystem.h
 	$(S) echo "GEN   $(PWD)/$@"
 
 
-
+TAGS:
+	find . -iname '*.c' -o -iname '*.cpp' -o -iname '*.h' -o -iname '*.hpp' > cscope.files
+	cscope -b -i cscope.files -f cscope.out
+	ctags -R 
 clean:
 	rm -rf $(OBJECTS) $(TARGET_APP)
 
